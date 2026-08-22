@@ -1,0 +1,10 @@
+{
+  "description": "Manage beauty services efficiently with a web platform designed for Senegalese professionals, streamlining appointments, client interactions, and business insights.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

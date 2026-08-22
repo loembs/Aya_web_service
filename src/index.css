@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --color-aya-purple: #3C2164;
+  --color-aya-pink: #E64F92;
+  --color-aya-cream: #FDF1E5;
+  --color-aya-bg: #F7F5FA;
+  --color-aya-text: #6B6478;
+  --color-aya-ink: #1A1030;
+  --color-aya-green: #1A8A55;
+  --font-display: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  font-family: var(--font-body);
+  background: #F7F5FA;
+  color: #1a1030;
+  margin: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button { cursor: pointer; }
+button, input, select, textarea { font-family: inherit; }
+
+:focus-visible {
+  outline: 2px solid #E64F92;
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #E64F92;
+  color: #fff;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d4cce0; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #b8adc8; }
