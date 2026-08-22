@@ -24,14 +24,14 @@ export default function Sidebar({
       <button
         onClick={() => setActive("dashboard")}
         aria-label="AYA Pro — tableau de bord"
-        className={`border-b border-white/10 text-left ${collapsed ? "px-2 py-3" : "px-3.5 py-3"}`}
+        className={`border-b border-white/10 text-left ${collapsed ? "px-2 py-2.5" : "px-3.5 py-2.5"}`}
       >
         {collapsed ? (
-          <img src={LOGO_URL} alt="AYA" className="mx-auto h-10 w-10 rounded-lg object-cover" />
+          <img src={LOGO_URL} alt="AYA" className="mx-auto h-9 w-9 rounded-lg object-cover" />
         ) : (
           <div>
-            <img src={LOGO_URL} alt="AYA" width={168} className="rounded-lg object-cover" />
-            <div className="mt-1.5 pl-0.5 text-[10px] font-semibold tracking-[0.28em] text-aya-cream/70">PRO</div>
+            <img src={LOGO_URL} alt="AYA" className="h-11 w-[148px] rounded-lg object-cover object-center" />
+            <div className="mt-1 pl-0.5 text-[10px] font-semibold tracking-[0.28em] text-aya-cream/70">PRO</div>
           </div>
         )}
       </button>
