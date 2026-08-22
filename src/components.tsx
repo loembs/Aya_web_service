@@ -6,21 +6,32 @@ import type { Status } from "./data";
 import { IconPlus } from "./icons";
 
 export function AyaLogo({
-  width = 148,
+  width = 132,
   className = "",
 }: {
   width?: number;
   className?: string;
 }) {
+  const scale = 2.55;
   return (
-    <img
-      src={logoSrc}
-      alt="AYA"
-      width={width}
-      draggable={false}
-      className={`block select-none object-contain ${className}`}
-      style={{ width, height: "auto" }}
-    />
+    <div
+      className={`relative overflow-hidden ${className}`}
+      style={{ width, height: width * 0.36 }}
+      role="img"
+      aria-label="AYA"
+    >
+      <img
+        src={logoSrc}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
+        style={{
+          width: width * scale,
+          height: width * scale,
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+    </div>
   );
 }
 

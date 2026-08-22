@@ -125,7 +125,7 @@ function PhonePreview({ name, desc, hours }: { name: string; desc: string; hours
         <div className="-mt-6 px-4">
           <div className="flex items-end gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-white bg-aya-purple">
-              <AyaLogo width={48} className="rounded-lg" />
+              <AyaLogo width={52} />
             </div>
             <div className="pb-1">
               <div className="flex items-center gap-1 text-[11px] font-semibold text-aya-pink">

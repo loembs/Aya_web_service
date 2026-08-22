@@ -1,8 +1,9 @@
 import { NAV_GROUPS } from "./data";
 import { NAV_ICONS, IconCrown, IconSettings } from "./icons";
-import { AyaLogo } from "./components";
 import { C } from "./theme";
-import logoSrc from "./assets/aya-logo.jpg";
+
+const LOGO_URL =
+  "https://res.cloudinary.com/dprbhsvxl/image/upload/v1787358731/WhatsApp_Image_2026-08-18_at_13.19.55_v4tlpn.jpg";
 
 export default function Sidebar({
   active,
@@ -23,17 +24,18 @@ export default function Sidebar({
       <button
         onClick={() => setActive("dashboard")}
         aria-label="AYA Pro — tableau de bord"
-        className={`border-b border-white/10 text-left ${collapsed ? "px-2 py-4" : "px-4 py-5"}`}
+        className={`border-b border-white/10 text-left ${collapsed ? "px-2 py-3" : "px-3.5 py-3"}`}
       >
         {collapsed ? (
-          <img src={logoSrc} alt="AYA" className="mx-auto h-10 w-10 rounded-lg object-cover" />
+          <img src={LOGO_URL} alt="AYA" className="mx-auto h-10 w-10 rounded-lg object-cover" />
         ) : (
           <div>
-            <AyaLogo width={168} className="rounded-lg" />
+            <img src={LOGO_URL} alt="AYA" width={168} className="rounded-lg object-cover" />
             <div className="mt-1.5 pl-0.5 text-[10px] font-semibold tracking-[0.28em] text-aya-cream/70">PRO</div>
           </div>
         )}
       </button>
+      
 
       {!collapsed && (
         <div className="mx-3 mt-3 flex items-center gap-2.5 rounded-xl bg-white/10 px-2.5 py-2.5">
