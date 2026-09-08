@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { AyaLogo, Field, Input, Select, PrimaryBtn } from "../components";
 import { C } from "../theme";
-import { IconCheck } from "../icons";
+import { IconCheck, IconGoogle } from "../icons";
 import { login, requestPasswordReset, verify2fa } from "../api/auth";
+import { clearOAuthCallback, completeOAuth, readOAuthCallback, startGoogleOAuth } from "../api/oauth";
 import { submitTenantApplication } from "../api/onboarding";
 import { ApiError } from "../api/errors";
 import { saveTokens } from "../api/session";
@@ -49,6 +50,59 @@ export default function Auth({
   const [resetSent, setResetSent] = useState(false);
   const tempTokenRef = useRef<string | null>(null);
   const { applySession } = useAuth();
+  const oauthHandled = useRef(false);
+
+  async function applyLoginResult(result: Awaited<ReturnType<typeof completeOAuth>>) {
+    if (result.status === "connecté" && result.access_token && result.refresh_token) {
+      saveTokens(result.access_token, result.refresh_token);
+      await applySession(result.user_profile ?? undefined);
+      onEnter();
+      return;
+    }
+    if (!result.temp_token) {
+      setAuthError("Connexion incomplète. Réessayez.");
+      return;
+    }
+    tempTokenRef.current = result.temp_token;
+    setNeedOtp(true);
+  }
+
+  async function onGoogleClick() {
+    setAuthError(null);
+    setBusy(true);
+    try {
+      const { url } = await startGoogleOAuth();
+      window.location.assign(url);
+    } catch (err) {
+      setAuthError(err instanceof ApiError ? err.message : "Google est indisponible pour le moment.");
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (oauthHandled.current) return;
+    const callback = readOAuthCallback();
+    if (!callback) return;
+    oauthHandled.current = true;
+    if ("error" in callback) {
+      clearOAuthCallback();
+      setAuthError("La connexion Google a été annulée ou refusée.");
+      return;
+    }
+    setBusy(true);
+    void (async () => {
+      try {
+        const result = await completeOAuth(callback.accessToken, callback.refreshToken);
+        clearOAuthCallback();
+        await applyLoginResult(result);
+      } catch (err) {
+        clearOAuthCallback();
+        setAuthError(err instanceof ApiError ? err.message : "Connexion Google impossible.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, []);
 
   async function onLoginSubmit(event: FormEvent) {
     event.preventDefault();
@@ -56,19 +110,8 @@ export default function Auth({
     setBusy(true);
     try {
       const challenge = await login({ email: email.trim(), password });
-      if (challenge.status === "connecté" && challenge.access_token && challenge.refresh_token) {
-        saveTokens(challenge.access_token, challenge.refresh_token);
-        await applySession(challenge.user_profile ?? undefined);
-        onEnter();
-        return;
-      }
-      if (!challenge.temp_token) {
-        setAuthError("Connexion incomplète. Réessayez.");
-        return;
-      }
-      tempTokenRef.current = challenge.temp_token;
+      await applyLoginResult(challenge);
       setPassword("");
-      setNeedOtp(true);
     } catch (err) {
       setAuthError(err instanceof ApiError ? err.message : "Connexion impossible.");
     } finally {
@@ -147,6 +190,8 @@ export default function Auth({
           </form>
         ) : (
           <form className="flex flex-col gap-3.5" onSubmit={onLoginSubmit} autoComplete="on">
+            <GoogleBtn busy={busy} onClick={onGoogleClick} />
+            <AuthDivider />
             <Field label="E-mail">
               <Input
                 type="email"
@@ -246,6 +291,8 @@ export default function Auth({
               }
             }}
           >
+            <GoogleBtn busy={busy} onClick={onGoogleClick} />
+            <AuthDivider />
             <Field label="Votre nom">
               <Input value={contactName} onChange={(e) => setContactName(e.target.value)} required />
             </Field>
@@ -441,6 +488,30 @@ export default function Auth({
         </div>
       </main>
     </div>
+  );
+}
+
+function AuthDivider() {
+  return (
+    <div className="flex items-center gap-3 text-[11px] text-aya-text">
+      <span className="h-px flex-1 bg-[#eeeaf6]" />
+      ou
+      <span className="h-px flex-1 bg-[#eeeaf6]" />
+    </div>
+  );
+}
+
+function GoogleBtn({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#e6e1ef] bg-white px-4 py-2.5 text-sm font-semibold text-aya-ink disabled:opacity-60"
+    >
+      <IconGoogle size={18} />
+      Continuer avec Google
+    </button>
   );
 }
 

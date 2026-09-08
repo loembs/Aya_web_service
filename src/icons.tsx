@@ -276,6 +276,29 @@ export function IconWhatsapp(p: P) {
   );
 }
 
+export function IconGoogle({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M23.49 12.27c0-.82-.07-1.64-.23-2.43H12v4.6h6.44a5.5 5.5 0 0 1-2.39 3.61v2.99h3.86c2.26-2.08 3.58-5.15 3.58-8.77Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.95-2.96l-3.86-2.99c-1.07.72-2.45 1.15-4.09 1.15-3.14 0-5.8-2.12-6.75-4.96H1.27v3.09A12 12 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.25 14.24A7.2 7.2 0 0 1 4.86 12c0-.78.14-1.53.38-2.24V6.67H1.27A12 12 0 0 0 0 12c0 1.94.46 3.78 1.27 5.33l3.98-3.09Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.76 0 3.34.61 4.59 1.8l3.44-3.44C17.95 1.19 15.23 0 12 0 7.31 0 3.26 2.69 1.27 6.67l3.98 3.09C6.2 6.87 8.86 4.75 12 4.75Z"
+      />
+    </svg>
+  );
+}
+
 export const NAV_ICONS: Record<string, (p: P) => ReactElement> = {
   dashboard: IconGrid,
   agenda: IconCalendar,
