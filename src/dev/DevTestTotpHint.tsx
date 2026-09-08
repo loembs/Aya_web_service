@@ -22,12 +22,14 @@ function base32Decode(secret: string): Uint8Array {
 
 async function totpNow(secret: string): Promise<string> {
   const keyData = base32Decode(secret);
+  const raw = new ArrayBuffer(keyData.byteLength);
+  new Uint8Array(raw).set(keyData);
   const counter = Math.floor(Date.now() / 1000 / STEP);
   const buffer = new ArrayBuffer(8);
   new DataView(buffer).setUint32(4, counter);
   const key = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    raw,
     { name: "HMAC", hash: "SHA-1" },
     false,
     ["sign"],
@@ -51,6 +53,7 @@ export function DevTestTotpHint({ onFill }: { onFill: (code: string) => void }) 
   const [left, setLeft] = useState(STEP);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     let alive = true;
     async function tick() {
       const next = await totpNow(TEST_SECRET);
@@ -58,6 +61,7 @@ export function DevTestTotpHint({ onFill }: { onFill: (code: string) => void }) 
       if (alive) {
         setCode(next);
         setLeft(remaining);
+        onFill(next);
       }
     }
     void tick();
@@ -66,23 +70,14 @@ export function DevTestTotpHint({ onFill }: { onFill: (code: string) => void }) 
       alive = false;
       window.clearInterval(id);
     };
-  }, []);
+  }, [onFill]);
 
   if (!import.meta.env.DEV) return null;
 
   return (
-    <div className="rounded-lg border border-dashed border-aya-pink/40 bg-aya-pink/5 px-3 py-2 text-xs text-aya-text">
-      <p>
-        Compte test — code actuel : <span className="font-mono font-semibold text-aya-ink">{code}</span>{" "}
-        ({left}s)
-      </p>
-      <button
-        type="button"
-        className="mt-1 font-semibold text-aya-pink"
-        onClick={() => code && onFill(code)}
-      >
-        Remplir le champ
-      </button>
-    </div>
+    <p className="text-xs text-aya-text">
+      Compte test : le code est saisi tout seul ({left}s){" "}
+      <span className="font-mono font-semibold text-aya-ink">{code}</span>
+    </p>
   );
 }

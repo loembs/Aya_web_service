@@ -5,7 +5,7 @@ import { AVATAR_COLORS } from "./data";
 import type { Status } from "./data";
 import { useAuth } from "./auth/AuthContext";
 import { createBooking } from "./api/bookings";
-import { listClients } from "./api/clients";
+import { createClient, listClients } from "./api/clients";
 import { listServices } from "./api/catalog";
 import { listPraticiens } from "./api/team";
 import { ApiError } from "./api/errors";
@@ -291,6 +291,8 @@ export function NewRdvForm({ onClose }: { onClose: () => void }) {
   const [services, setServices] = useState<ServiceListResponseDTO[]>([]);
   const [praticiens, setPraticiens] = useState<PraticienListResponseDTO[]>([]);
   const [clientId, setClientId] = useState("");
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [praticienId, setPraticienId] = useState("");
   const [startsAt, setStartsAt] = useState("");
@@ -299,26 +301,62 @@ export function NewRdvForm({ onClose }: { onClose: () => void }) {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (!institutId) return;
-    Promise.all([listClients(institutId), listServices(institutId), listPraticiens(institutId)])
-      .then(([c, s, p]) => {
-        setClients(c);
-        setServices(s.filter((item) => item.is_active));
-        setPraticiens(p);
-      })
-      .catch(() => {
-        setError("Les listes n’ont pas pu être chargées. Réessayez dans un instant.");
-      });
+    if (!institutId) {
+      setError("Aucun institut n’est associé à cette session.");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const [clientsRes, servicesRes, praticiensRes] = await Promise.allSettled([
+        listClients(institutId),
+        listServices(institutId),
+        listPraticiens(institutId),
+      ]);
+      if (cancelled) return;
+      if (clientsRes.status === "fulfilled") setClients(clientsRes.value);
+      if (servicesRes.status === "fulfilled") {
+        setServices(servicesRes.value.filter((item) => item.is_active !== false));
+      }
+      if (praticiensRes.status === "fulfilled") setPraticiens(praticiensRes.value);
+      const failed = [clientsRes, servicesRes, praticiensRes].find(
+        (item): item is PromiseRejectedResult => item.status === "rejected",
+      );
+      if (failed) {
+        const reason = failed.reason;
+        setError(
+          reason instanceof ApiError
+            ? reason.message
+            : "Certaines listes n’ont pas pu être chargées. Vous pouvez quand même saisir une cliente.",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [institutId]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!institutId || !clientId || !serviceId || !startsAt) return;
+    if (!institutId || !serviceId || !startsAt) return;
     setSaving(true);
     setError(null);
     try {
+      let resolvedClientId = clientId;
+      if (!resolvedClientId) {
+        const name = newClientName.trim();
+        if (name.length < 2) {
+          setError("Choisissez une cliente ou saisissez son nom.");
+          setSaving(false);
+          return;
+        }
+        const created = await createClient(institutId, {
+          full_name: name,
+          phone: newClientPhone.trim() || undefined,
+        });
+        resolvedClientId = created.id;
+      }
       await createBooking(institutId, {
-        client_id: clientId,
+        client_id: resolvedClientId,
         service_id: serviceId,
         praticien_id: praticienId || null,
         starts_at: new Date(startsAt).toISOString(),
@@ -340,8 +378,8 @@ export function NewRdvForm({ onClose }: { onClose: () => void }) {
     <form className="flex flex-col gap-3" onSubmit={submit}>
       {error && <p className="text-xs text-aya-pink">{error}</p>}
       <Field label="Cliente">
-        <Select value={clientId} onChange={(e) => setClientId(e.target.value)} required>
-          <option value="">Choisir une cliente</option>
+        <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+          <option value="">Nouvelle cliente</option>
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.full_name}
@@ -349,9 +387,19 @@ export function NewRdvForm({ onClose }: { onClose: () => void }) {
           ))}
         </Select>
       </Field>
+      {!clientId && (
+        <>
+          <Field label="Nom de la cliente">
+            <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} required={clients.length === 0} />
+          </Field>
+          <Field label="Téléphone">
+            <Input value={newClientPhone} onChange={(e) => setNewClientPhone(e.target.value)} />
+          </Field>
+        </>
+      )}
       <Field label="Prestation">
         <Select value={serviceId} onChange={(e) => setServiceId(e.target.value)} required>
-          <option value="">Choisir une prestation</option>
+          <option value="">{services.length ? "Choisir une prestation" : "Aucune prestation — créez-en une d’abord"}</option>
           {services.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -372,7 +420,7 @@ export function NewRdvForm({ onClose }: { onClose: () => void }) {
       <Field label="Début">
         <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
       </Field>
-      <PrimaryBtn type="submit" full disabled={saving}>
+      <PrimaryBtn type="submit" full disabled={saving || !serviceId}>
         {saving ? "Enregistrement…" : "Créer le rendez-vous"}
       </PrimaryBtn>
     </form>
