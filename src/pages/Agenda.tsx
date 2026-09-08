@@ -1,18 +1,69 @@
-import { useState } from "react";
-import { HOURS, WEEK, CALENDAR_EVENTS, TEAM } from "../data";
+import { useEffect, useMemo, useState } from "react";
+import { HOURS } from "../data";
 import { C } from "../theme";
-import { PageHeader, PrimaryBtn, Card } from "../components";
+import { PageHeader, PrimaryBtn, Card, Empty } from "../components";
 import { IconPlus } from "../icons";
+import { useAuth } from "../auth/AuthContext";
+import { listPlanningSlots } from "../api/planning";
+import { formatTime, isoDate } from "../api/format";
+import type { PlanningSlotResponseDTO } from "../api/dto";
+
+function mondayOf(date: Date): Date {
+  const copy = new Date(date);
+  const offset = (copy.getDay() + 6) % 7;
+  copy.setDate(copy.getDate() - offset);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function addDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function slotsFor(slots: PlanningSlotResponseDTO[], day: Date, hour: string) {
+  return slots.filter((slot) => {
+    const start = new Date(slot.starts_at);
+    return (
+      start.toDateString() === day.toDateString() &&
+      `${String(start.getHours()).padStart(2, "0")}:00` === hour
+    );
+  });
+}
+
+function slotsForDay(slots: PlanningSlotResponseDTO[], day: Date) {
+  return slots.filter((slot) => new Date(slot.starts_at).toDateString() === day.toDateString());
+}
 
 export default function Agenda({ onNewRdv }: { onNewRdv: () => void }) {
+  const { institutId, institutName } = useAuth();
   const [view, setView] = useState<"Jour" | "Semaine" | "Mois">("Semaine");
-  const [staffFilter, setStaffFilter] = useState("Toutes");
+  const [slots, setSlots] = useState<PlanningSlotResponseDTO[]>([]);
+  const weekStart = useMemo(() => mondayOf(new Date()), []);
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const weekLabel = `${weekDays[0].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} – ${weekDays[6].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`;
+
+  useEffect(() => {
+    if (!institutId) return;
+    let cancelled = false;
+    listPlanningSlots(institutId, isoDate(weekDays[0]), isoDate(weekDays[6]))
+      .then((data) => {
+        if (!cancelled) setSlots(data.filter((s) => s.booking_id));
+      })
+      .catch(() => {
+        if (!cancelled) setSlots([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [institutId, weekDays]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="Agenda"
-        subtitle="19 – 25 mai 2025 · Andal Beauty Studio"
+        subtitle={`${weekLabel}${institutName ? ` · ${institutName}` : ""}`}
         action={
           <div className="flex items-center gap-3">
             <div className="flex rounded-lg bg-aya-bg p-0.5">
@@ -34,74 +85,63 @@ export default function Agenda({ onNewRdv }: { onNewRdv: () => void }) {
         }
       />
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-7 py-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-aya-text">Praticiennes :</span>
-          {["Toutes", ...TEAM.map((t) => t.short)].map((s) => (
-            <button
-              key={s}
-              onClick={() => setStaffFilter(s)}
-              className="rounded-full px-3 py-1 font-display text-[11px] font-semibold"
-              style={{
-                background: staffFilter === s ? C.purple : "#fff",
-                color: staffFilter === s ? C.cream : C.text,
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-
-        {view === "Jour" && <DayView staffFilter={staffFilter} />}
-        {view === "Semaine" && <WeekView staffFilter={staffFilter} />}
-        {view === "Mois" && <MonthView />}
+        {view === "Jour" && (
+          <DayView
+            slots={slots}
+            day={weekDays[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]}
+          />
+        )}
+        {view === "Semaine" && <WeekView weekDays={weekDays} slots={slots} />}
+        {view === "Mois" && <MonthView slots={slots} />}
       </div>
     </div>
   );
 }
 
-function WeekView({ staffFilter }: { staffFilter: string }) {
+function WeekView({ weekDays, slots }: { weekDays: Date[]; slots: PlanningSlotResponseDTO[] }) {
+  const today = new Date().toDateString();
   return (
     <Card className="overflow-x-auto p-4">
+      {slots.length === 0 && (
+        <Empty title="Aucun rendez-vous cette semaine" sub="Les créneaux réservés de l'API s'affichent ici." />
+      )}
       <div className="min-w-[900px]">
         <div className="grid" style={{ gridTemplateColumns: "56px repeat(7,1fr)" }}>
           <div />
-          {WEEK.map((d, i) => (
-            <div key={d} className="pb-2 text-center">
-              <div className="text-[11px] font-semibold" style={{ color: i === 2 ? C.pink : C.text }}>
-                {d.split(" ")[0]}
+          {weekDays.map((d) => {
+            const isToday = d.toDateString() === today;
+            return (
+              <div key={d.toISOString()} className="pb-2 text-center">
+                <div className="text-[11px] font-semibold" style={{ color: isToday ? C.pink : C.text }}>
+                  {d.toLocaleDateString("fr-FR", { weekday: "short" })}
+                </div>
+                <div
+                  className="mx-auto mt-1 flex h-8 w-8 items-center justify-center rounded-full font-display text-sm font-bold"
+                  style={{ background: isToday ? C.pink : "transparent", color: isToday ? "#fff" : C.ink }}
+                >
+                  {d.getDate()}
+                </div>
               </div>
-              <div
-                className="mx-auto mt-1 flex h-8 w-8 items-center justify-center rounded-full font-display text-sm font-bold"
-                style={{ background: i === 2 ? C.pink : "transparent", color: i === 2 ? "#fff" : C.ink }}
-              >
-                {d.split(" ")[1]}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {HOURS.map((hour) => (
           <div key={hour} className="grid border-t border-[#f0ebf8]" style={{ gridTemplateColumns: "56px repeat(7,1fr)", minHeight: 72 }}>
             <div className="pt-2 pr-2 text-right text-[11px] text-[#b0a8c2]">{hour}</div>
-            {WEEK.map((day) => {
-              const events = (CALENDAR_EVENTS[`${day}:${hour}`] || []).filter(
-                (e) => staffFilter === "Toutes" || e.staff === staffFilter,
-              );
-              return (
-                <div key={day} className="border-l border-[#f6f2fb] p-1">
-                  {events.map((ev) => (
-                    <div
-                      key={ev.name + ev.service}
-                      className="mb-1 cursor-pointer rounded-lg px-2 py-1.5 text-[11px] leading-snug"
-                      style={{ background: ev.color }}
-                    >
-                      <div className="font-semibold text-aya-ink">{ev.name}</div>
-                      <div className="text-aya-text">{ev.service}</div>
-                      <div className="mt-0.5 text-[10px] text-aya-text">{ev.staff}</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
+            {weekDays.map((day) => (
+              <div key={day.toISOString()} className="border-l border-[#f6f2fb] p-1">
+                {slotsFor(slots, day, hour).map((slot) => (
+                  <div
+                    key={slot.booking_id ?? slot.starts_at}
+                    className="mb-1 rounded-lg px-2 py-1.5 text-[11px] leading-snug"
+                    style={{ background: "#F9C6D8" }}
+                  >
+                    <div className="font-semibold text-aya-ink">{formatTime(slot.starts_at)}</div>
+                    <div className="text-aya-text">{slot.status ?? "RDV"}</div>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -109,87 +149,68 @@ function WeekView({ staffFilter }: { staffFilter: string }) {
   );
 }
 
-function DayView({ staffFilter }: { staffFilter: string }) {
-  const cols = staffFilter === "Toutes" ? TEAM : TEAM.filter((t) => t.short === staffFilter);
+function DayView({ slots, day }: { slots: PlanningSlotResponseDTO[]; day: Date }) {
+  const items = slotsForDay(slots, day);
   return (
     <Card className="overflow-x-auto p-4">
-      <div className="mb-3 font-display text-sm font-bold text-aya-ink">Mercredi 21 mai 2025</div>
-      <div className="min-w-[720px]">
-        <div className="grid" style={{ gridTemplateColumns: `56px repeat(${cols.length},1fr)` }}>
-          <div />
-          {cols.map((t) => (
-            <div key={t.id} className="flex items-center gap-2 px-2 pb-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: t.color }}>
-                {t.avatar}
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-aya-ink">{t.short}</div>
-                <div className="text-[10px] text-aya-text">{t.role.split("·")[0]}</div>
-              </div>
+      <div className="mb-3 font-display text-sm font-bold text-aya-ink">
+        {day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+      </div>
+      {items.length === 0 ? (
+        <Empty title="Aucun rendez-vous" sub="Rien de réservé pour cette journée." />
+      ) : (
+        <div className="space-y-2">
+          {items.map((slot) => (
+            <div key={slot.booking_id ?? slot.starts_at} className="rounded-xl bg-aya-bg px-3 py-2 text-sm">
+              {formatTime(slot.starts_at)} – {formatTime(slot.ends_at)} · {slot.status}
             </div>
           ))}
         </div>
-        {HOURS.map((hour) => (
-          <div key={hour} className="grid border-t border-[#f0ebf8]" style={{ gridTemplateColumns: `56px repeat(${cols.length},1fr)`, minHeight: 64 }}>
-            <div className="pt-2 pr-2 text-right text-[11px] text-[#b0a8c2]">{hour}</div>
-            {cols.map((t) => {
-              const key = `Mer 21:${hour}`;
-              const events = (CALENDAR_EVENTS[key] || []).filter((e) => e.staff === t.short);
-              return (
-                <div key={t.id} className="border-l border-[#f6f2fb] p-1">
-                  {events.map((ev) => (
-                    <div key={ev.name} className="rounded-lg px-2 py-1.5 text-[11px]" style={{ background: ev.color }}>
-                      <div className="font-semibold">{ev.name}</div>
-                      <div className="text-aya-text">{ev.service}</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+      )}
     </Card>
   );
 }
 
-function MonthView() {
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
-  const dots: Record<number, string[]> = {
-    19: ["#F9C6D8", "#D6C9F0"],
-    20: ["#C9DFF0"],
-    21: ["#F9C6D8", "#C9DFF0", "#F5C6E0", "#D6C9F0"],
-    22: ["#F9DFC6"],
-    23: ["#F9C6D8", "#C9F0DC"],
-    24: ["#C9DFF0", "#F9DFC6"],
-  };
+function MonthView({ slots }: { slots: PlanningSlotResponseDTO[] }) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
+  const counts: Record<number, number> = {};
+  for (const slot of slots) {
+    const d = new Date(slot.starts_at);
+    if (d.getMonth() === month && d.getFullYear() === year) {
+      counts[d.getDate()] = (counts[d.getDate()] ?? 0) + 1;
+    }
+  }
   return (
     <Card>
-      <div className="mb-4 font-display text-sm font-bold text-aya-ink">Mai 2025</div>
+      <div className="mb-4 font-display text-sm font-bold text-aya-ink">
+        {now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
+      </div>
       <div className="grid grid-cols-7 gap-2">
         {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
           <div key={d} className="pb-2 text-center text-[11px] font-semibold text-aya-text">
             {d}
           </div>
         ))}
-        {Array.from({ length: 3 }).map((_, i) => (
+        {Array.from({ length: firstWeekday }).map((_, i) => (
           <div key={"e" + i} />
         ))}
-        {days.map((d) => (
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
           <div
             key={d}
             className="min-h-[88px] rounded-xl border border-[#f0ebf8] p-2"
-            style={{ background: d === 21 ? "#FDF1E5" : "#fff", borderColor: d === 21 ? C.pink : "#f0ebf8" }}
+            style={{
+              background: d === now.getDate() ? "#FDF1E5" : "#fff",
+              borderColor: d === now.getDate() ? C.pink : "#f0ebf8",
+            }}
           >
-            <div className="mb-1 text-xs font-semibold" style={{ color: d === 21 ? C.pink : C.ink }}>
+            <div className="mb-1 text-xs font-semibold" style={{ color: d === now.getDate() ? C.pink : C.ink }}>
               {d}
             </div>
-            <div className="flex flex-wrap gap-1">
-              {(dots[d] || []).map((c, i) => (
-                <span key={i} className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
-              ))}
-            </div>
-            {dots[d] && <div className="mt-1 text-[10px] text-aya-text">{dots[d].length} RDV</div>}
+            {counts[d] ? <div className="mt-1 text-[10px] text-aya-text">{counts[d]} RDV</div> : null}
           </div>
         ))}
       </div>

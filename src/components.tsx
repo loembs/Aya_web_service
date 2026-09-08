@@ -1,9 +1,15 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { useEffect, useState, type FormEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import logoSrc from "./assets/aya-logo.jpg";
 import { C, SHADOW } from "./theme";
 import { AVATAR_COLORS } from "./data";
 import type { Status } from "./data";
-import { IconPlus } from "./icons";
+import { useAuth } from "./auth/AuthContext";
+import { createBooking } from "./api/bookings";
+import { listClients } from "./api/clients";
+import { listServices } from "./api/catalog";
+import { listPraticiens } from "./api/team";
+import { ApiError } from "./api/errors";
+import type { ClientListResponseDTO, PraticienListResponseDTO, ServiceListResponseDTO } from "./api/dto";
 
 export function AyaLogo({
   width = 132,
@@ -65,6 +71,8 @@ export function StatusBadge({ status }: { status: string }) {
     scheduled: { label: "Planifiée", bg: "#EEEAF6", color: C.purple },
     ended: { label: "Terminée", bg: "#F3F1F6", color: C.text },
     draft: { label: "Brouillon", bg: C.orangeBg, color: C.orange },
+    rejected: { label: "Rejetée", bg: C.redBg, color: C.red },
+    suspended: { label: "Suspendu", bg: C.redBg, color: C.red },
   };
   const s = map[status] || map.pending;
   return (
@@ -145,17 +153,20 @@ export function PrimaryBtn({
   onClick,
   type = "button",
   full,
+  disabled,
 }: {
   children: ReactNode;
   onClick?: () => void;
   type?: "button" | "submit";
   full?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-aya-pink px-4 py-2.5 font-display text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(230,79,146,0.28)] transition hover:bg-[#d64384] active:scale-[0.98] ${full ? "w-full" : ""}`}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-aya-pink px-4 py-2.5 font-display text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(230,79,146,0.28)] transition hover:bg-[#d64384] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${full ? "w-full" : ""}`}
     >
       {children}
     </button>
@@ -275,60 +286,95 @@ export function Modal({
 }
 
 export function NewRdvForm({ onClose }: { onClose: () => void }) {
+  const { institutId } = useAuth();
+  const [clients, setClients] = useState<ClientListResponseDTO[]>([]);
+  const [services, setServices] = useState<ServiceListResponseDTO[]>([]);
+  const [praticiens, setPraticiens] = useState<PraticienListResponseDTO[]>([]);
+  const [clientId, setClientId] = useState("");
+  const [serviceId, setServiceId] = useState("");
+  const [praticienId, setPraticienId] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!institutId) return;
+    Promise.all([listClients(institutId), listServices(institutId), listPraticiens(institutId)])
+      .then(([c, s, p]) => {
+        setClients(c);
+        setServices(s.filter((item) => item.is_active));
+        setPraticiens(p);
+      })
+      .catch(() => {
+        setError("Les listes n’ont pas pu être chargées. Réessayez dans un instant.");
+      });
+  }, [institutId]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!institutId || !clientId || !serviceId || !startsAt) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createBooking(institutId, {
+        client_id: clientId,
+        service_id: serviceId,
+        praticien_id: praticienId || null,
+        starts_at: new Date(startsAt).toISOString(),
+      });
+      setDone(true);
+      setTimeout(onClose, 900);
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : "Le rendez-vous n’a pas pu être créé.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (done) {
+    return <p className="py-6 text-center font-display text-sm font-semibold text-aya-purple">Rendez-vous enregistré</p>;
+  }
+
   return (
-    <form
-      className="flex flex-col gap-3.5"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-    >
+    <form className="flex flex-col gap-3" onSubmit={submit}>
+      {error && <p className="text-xs text-aya-pink">{error}</p>}
       <Field label="Cliente">
-        <Select defaultValue="Fatou Ndoye">
-          <option>Fatou Ndoye</option>
-          <option>Awa Diop</option>
-          <option>Mariama Sarr</option>
-          <option>Adama Ba</option>
-          <option>+ Nouvelle cliente</option>
+        <Select value={clientId} onChange={(e) => setClientId(e.target.value)} required>
+          <option value="">Choisir une cliente</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.full_name}
+            </option>
+          ))}
         </Select>
       </Field>
       <Field label="Prestation">
-        <Select defaultValue="Maquillage Soft Glam">
-          <option>Maquillage Soft Glam</option>
-          <option>Pose perruque</option>
-          <option>Brushing + Soin</option>
-          <option>Onglerie · Pose Gel</option>
-          <option>Soin du visage</option>
+        <Select value={serviceId} onChange={(e) => setServiceId(e.target.value)} required>
+          <option value="">Choisir une prestation</option>
+          {services.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Date">
-          <Input type="date" defaultValue="2025-05-21" />
-        </Field>
-        <Field label="Heure">
-          <Input type="time" defaultValue="10:00" />
-        </Field>
-      </div>
       <Field label="Praticienne">
-        <Select defaultValue="Mourzane O.">
-          <option>Mourzane O.</option>
-          <option>Awa Ndiaye</option>
-          <option>Khady Fall</option>
-          <option>Ibrahima Sow</option>
+        <Select value={praticienId} onChange={(e) => setPraticienId(e.target.value)}>
+          <option value="">Sans préférence</option>
+          {praticiens.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.display_name}
+            </option>
+          ))}
         </Select>
       </Field>
-      <div className="mt-2 flex gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-1 rounded-xl bg-aya-bg py-2.5 font-display text-[13px] font-semibold text-aya-text hover:bg-[#ece7f3]"
-        >
-          Annuler
-        </button>
-        <PrimaryBtn type="submit" full>
-          <IconPlus size={14} /> Créer le rendez-vous
-        </PrimaryBtn>
-      </div>
+      <Field label="Début">
+        <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
+      </Field>
+      <PrimaryBtn type="submit" full disabled={saving}>
+        {saving ? "Enregistrement…" : "Créer le rendez-vous"}
+      </PrimaryBtn>
     </form>
   );
 }

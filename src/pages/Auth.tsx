@@ -1,8 +1,14 @@
-import { useState } from "react";
-import type { ReactNode } from "react";
+import { useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { AyaLogo, Field, Input, Select, PrimaryBtn } from "../components";
 import { C } from "../theme";
 import { IconCheck } from "../icons";
+import { login, requestPasswordReset, verify2fa } from "../api/auth";
+import { submitTenantApplication } from "../api/onboarding";
+import { ApiError } from "../api/errors";
+import { saveTokens } from "../api/session";
+import { useAuth } from "../auth/AuthContext";
+import { DevTestTotpHint, isDevTestStaff } from "../dev/DevTestTotpHint";
 
 const STEPS = [
   { id: 1, title: "Votre établissement", sub: "Qui êtes-vous ?" },
@@ -28,43 +34,172 @@ export default function Auth({
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>(["Maquillage Soft Glam", "Pose perruque"]);
   const [copied, setCopied] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [needOtp, setNeedOtp] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [institutName, setInstitutName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [honeypot, setHoneypot] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const tempTokenRef = useRef<string | null>(null);
+  const { applySession } = useAuth();
+
+  async function onLoginSubmit(event: FormEvent) {
+    event.preventDefault();
+    setAuthError(null);
+    setBusy(true);
+    try {
+      const challenge = await login({ email: email.trim(), password });
+      if (challenge.status === "connecté" && challenge.access_token && challenge.refresh_token) {
+        saveTokens(challenge.access_token, challenge.refresh_token);
+        await applySession(challenge.user_profile ?? undefined);
+        onEnter();
+        return;
+      }
+      if (!challenge.temp_token) {
+        setAuthError("Connexion incomplète. Réessayez.");
+        return;
+      }
+      tempTokenRef.current = challenge.temp_token;
+      setPassword("");
+      setNeedOtp(true);
+    } catch (err) {
+      setAuthError(err instanceof ApiError ? err.message : "Connexion impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onOtpSubmit(event: FormEvent) {
+    event.preventDefault();
+    const tempToken = tempTokenRef.current;
+    if (!tempToken) {
+      setNeedOtp(false);
+      setAuthError("Session 2FA expirée. Recommencez la connexion.");
+      return;
+    }
+    setAuthError(null);
+    setBusy(true);
+    try {
+      const session = await verify2fa({ temp_token: tempToken, code: otp });
+      tempTokenRef.current = null;
+      setOtp("");
+      saveTokens(session.access_token, session.refresh_token);
+      await applySession(session.user_profile);
+      onEnter();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Code 2FA refusé.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (mode === "login") {
     return (
       <Shell>
-        <h1 className="mb-1 font-display text-2xl font-bold text-aya-ink">Bon retour</h1>
-        <p className="mb-6 text-sm text-aya-text">Connectez-vous à votre espace AYA Pro.</p>
-        <form
-          className="flex flex-col gap-3.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onEnter();
-          }}
-        >
-          <Field label="E-mail">
-            <Input type="email" defaultValue="mourzane@andalbeauty.sn" />
-          </Field>
-          <Field label="Mot de passe">
-            <Input type="password" defaultValue="••••••••" />
-          </Field>
-          <div className="flex items-center justify-between text-xs">
-            <label className="flex items-center gap-2 text-aya-text">
-              <input type="checkbox" defaultChecked className="accent-[#E64F92]" /> Se souvenir de moi
-            </label>
-            <button type="button" className="font-medium text-aya-pink">
-              Mot de passe oublié ?
+        <h1 className="mb-1 font-display text-2xl font-bold text-aya-ink">
+          {needOtp ? "Vérification" : "Bon retour"}
+        </h1>
+        <p className="mb-6 text-sm text-aya-text">
+          {needOtp
+            ? "Saisissez le code à 6 chiffres de votre application d'authentification."
+            : "Connectez-vous à votre espace AYA Pro."}
+        </p>
+        {needOtp ? (
+          <form className="flex flex-col gap-3.5" onSubmit={onOtpSubmit} autoComplete="off">
+            <Field label="Code 2FA">
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+            </Field>
+            {isDevTestStaff(email) && <DevTestTotpHint onFill={setOtp} />}
+            {authError && (
+              <p className="text-xs" style={{ color: C.red }}>
+                {authError}
+              </p>
+            )}
+            <PrimaryBtn type="submit" full disabled={busy || otp.length !== 6}>
+              {busy ? "Vérification…" : "Valider"}
+            </PrimaryBtn>
+            <button
+              type="button"
+              className="text-xs font-medium text-aya-pink"
+              onClick={() => {
+                tempTokenRef.current = null;
+                setNeedOtp(false);
+                setOtp("");
+                setAuthError(null);
+              }}
+            >
+              Revenir à la connexion
             </button>
-          </div>
-          <PrimaryBtn type="submit" full>
-            Se connecter
-          </PrimaryBtn>
-        </form>
+          </form>
+        ) : (
+          <form className="flex flex-col gap-3.5" onSubmit={onLoginSubmit} autoComplete="on">
+            <Field label="E-mail">
+              <Input
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Field>
+            <Field label="Mot de passe">
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </Field>
+            {authError && (
+              <p className="text-xs" style={{ color: C.red }}>
+                {authError}
+              </p>
+            )}
+            <PrimaryBtn type="submit" full disabled={busy}>
+              {busy ? "Connexion…" : "Se connecter"}
+            </PrimaryBtn>
+            <button
+              type="button"
+              className="text-xs font-medium text-aya-pink"
+              disabled={busy || !email.trim()}
+              onClick={async () => {
+                setAuthError(null);
+                setBusy(true);
+                try {
+                  await requestPasswordReset(email.trim());
+                  setResetSent(true);
+                } catch (err) {
+                  setAuthError(err instanceof ApiError ? err.message : "L’e-mail n’a pas pu partir.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {resetSent ? "E-mail envoyé — regardez votre boîte" : "Recevoir un lien par e-mail"}
+            </button>
+          </form>
+        )}
+        {!needOtp && (
         <p className="mt-6 text-center text-sm text-aya-text">
           Pas encore de compte ?{" "}
           <button className="font-semibold text-aya-pink" onClick={() => onMode("signup")}>
             Créer un espace Pro
           </button>
         </p>
+        )}
       </Shell>
     );
   }
@@ -72,55 +207,73 @@ export default function Auth({
   if (mode === "signup") {
     return (
       <Shell>
-        <h1 className="mb-1 font-display text-2xl font-bold text-aya-ink">Créer votre espace Pro</h1>
-        <p className="mb-6 text-sm text-aya-text">Gratuit pour démarrer. Aucune carte requise.</p>
-        <form
-          className="flex flex-col gap-3.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onMode("onboarding");
-          }}
-        >
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Prénom">
-              <Input defaultValue="Mourzane" />
-            </Field>
-            <Field label="Nom">
-              <Input defaultValue="Ouédraogo" />
-            </Field>
+        <h1 className="mb-1 font-display text-2xl font-bold text-aya-ink">Demander un espace Pro</h1>
+        <p className="mb-6 text-sm text-aya-text">
+          Envoyez votre dossier. Nous confirmons chaque institut avant l’ouverture du compte.
+        </p>
+        {applied ? (
+          <div className="rounded-2xl bg-white p-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-aya-pink/15 text-aya-pink">
+              <IconCheck size={24} />
+            </div>
+            <p className="font-display text-sm font-semibold text-aya-ink">Demande bien reçue</p>
+            <p className="mt-2 text-xs text-aya-text">Nous revenons vers vous par e-mail dès validation.</p>
+            <button className="mt-4 text-sm font-semibold text-aya-pink" onClick={() => onMode("login")}>
+              Revenir à la connexion
+            </button>
           </div>
-          <Field label="Nom de l'établissement">
-            <Input defaultValue="Andal Beauty Studio" />
-          </Field>
-          <Field label="Catégorie">
-            <Select defaultValue="Institut de beauté">
-              {CATS.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </Select>
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Ville">
-              <Select defaultValue="Dakar">
-                {CITIES.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </Select>
+        ) : (
+          <form
+            className="flex flex-col gap-3.5"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setAuthError(null);
+              setBusy(true);
+              try {
+                await submitTenantApplication({
+                  institut_name: institutName,
+                  contact_name: contactName,
+                  email: email.trim(),
+                  phone: phone || undefined,
+                  address: address || undefined,
+                  website: honeypot,
+                });
+                setApplied(true);
+              } catch (err) {
+                setAuthError(err instanceof ApiError ? err.message : "La demande n’a pas pu partir, réessayez dans un instant.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Field label="Votre nom">
+              <Input value={contactName} onChange={(e) => setContactName(e.target.value)} required />
             </Field>
-            <Field label="Quartier">
-              <Input defaultValue="Almadies" />
+            <Field label="Nom de l'établissement">
+              <Input value={institutName} onChange={(e) => setInstitutName(e.target.value)} required />
             </Field>
-          </div>
-          <Field label="E-mail professionnel">
-            <Input type="email" defaultValue="mourzane@andalbeauty.sn" />
-          </Field>
-          <Field label="Mot de passe">
-            <Input type="password" defaultValue="••••••••" />
-          </Field>
-          <PrimaryBtn type="submit" full>
-            Continuer la configuration
-          </PrimaryBtn>
-        </form>
+            <Field label="E-mail professionnel">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </Field>
+            <Field label="Téléphone">
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </Field>
+            <Field label="Adresse">
+              <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+            </Field>
+            <div aria-hidden className="hidden">
+              <Input tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+            </div>
+            {authError && (
+              <p className="text-xs" style={{ color: C.red }}>
+                {authError}
+              </p>
+            )}
+            <PrimaryBtn type="submit" full disabled={busy}>
+              {busy ? "Envoi…" : "Envoyer ma demande"}
+            </PrimaryBtn>
+          </form>
+        )}
         <p className="mt-6 text-center text-sm text-aya-text">
           Déjà inscrit·e ?{" "}
           <button className="font-semibold text-aya-pink" onClick={() => onMode("login")}>

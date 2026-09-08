@@ -1,20 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
-import {
-  APPOINTMENTS, TODO_ITEMS, HOURS, WEEK, CALENDAR_EVENTS,
-  REVENUE_DATA, PIE_DATA, CLIENTS, PRESTATIONS,
-} from "../data";
+import { TODO_ITEMS, HOURS, WEEK, CALENDAR_EVENTS } from "../data";
 import { C } from "../theme";
 import {
-  Avatar, StatusBadge, KpiCard, Card, PrimaryBtn, AyaLogo,
+  Avatar, StatusBadge, KpiCard, Card, PrimaryBtn, AyaLogo, Empty,
 } from "../components";
 import {
   IconBell, IconPlus, IconClock, IconCard, IconUsers, IconChart,
   IconCalendar, IconMail, IconMegaphone, IconSpark, IconSearch,
 } from "../icons";
+import { useAuth } from "../auth/AuthContext";
+import { useBookings } from "../api/useBookings";
+import { fetchDashboardActivity, fetchDashboardChart, fetchDashboardStats } from "../api/dashboard";
+import { listClients } from "../api/clients";
+import { listServices } from "../api/catalog";
+import { formatDayLabel, formatFcfa, formatTime, initials } from "../api/format";
+import type {
+  ClientListResponseDTO,
+  DashboardChartPointDTO,
+  DashboardPeriodStatsDTO,
+  RecentActivityItemDTO,
+  ServiceListResponseDTO,
+} from "../api/dto";
 
 const TODO_ICONS: Record<string, typeof IconCalendar> = {
   calendar: IconCalendar,
@@ -30,17 +40,85 @@ export default function Dashboard({
   onNavigate: (id: string) => void;
   onNewRdv: () => void;
 }) {
+  const { user, institutName, institutId } = useAuth();
+  const { rows: bookings, loading } = useBookings();
+  const [dayStats, setDayStats] = useState<DashboardPeriodStatsDTO | null>(null);
+  const [chart, setChart] = useState<DashboardChartPointDTO[]>([]);
+  const [activity, setActivity] = useState<RecentActivityItemDTO[]>([]);
+  const [clients, setClients] = useState<ClientListResponseDTO[]>([]);
+  const [services, setServices] = useState<ServiceListResponseDTO[]>([]);
   const [calView, setCalView] = useState<"Jour" | "Semaine" | "Mois">("Semaine");
   const [prestaTab, setPrestaTab] = useState("Toutes");
+  const firstName = user?.full_name.trim().split(/\s+/)[0] ?? "";
+  const todayLabel = new Date().toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  const upcoming = bookings
+    .filter((b) => b.status !== "cancelled")
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    .slice(0, 6);
 
-  const filteredPresta = PRESTATIONS.filter((p) => prestaTab === "Toutes" || p.cat === prestaTab).slice(0, 5);
+  useEffect(() => {
+    if (!institutId) return;
+    let cancelled = false;
+    Promise.all([
+      fetchDashboardStats(institutId),
+      fetchDashboardChart(institutId),
+      fetchDashboardActivity(institutId),
+      listClients(institutId),
+      listServices(institutId),
+    ])
+      .then(([stats, chartData, activityData, clientRows, serviceRows]) => {
+        if (cancelled) return;
+        setDayStats(stats.day);
+        setChart(chartData.points);
+        setActivity(activityData.items);
+        setClients(clientRows);
+        setServices(serviceRows);
+      })
+      .catch(() => {
+        if (!cancelled) setDayStats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [institutId]);
+
+  const categoryMap: Record<string, string> = {
+    Toutes: "Toutes",
+    Maquillage: "maquillage",
+    Coiffure: "coiffure",
+    Onglerie: "onglerie",
+  };
+  const filteredPresta = services
+    .filter((p) => prestaTab === "Toutes" || p.category === categoryMap[prestaTab])
+    .slice(0, 5);
+  const pieData = dayStats
+    ? [
+        { name: "Confirmés", value: dayStats.confirmed, color: C.pink },
+        { name: "En attente", value: dayStats.pending, color: C.purple },
+        { name: "Terminés", value: dayStats.completed, color: "#C9F0DC" },
+      ].filter((d) => d.value > 0)
+    : [];
+  const chartRows = chart.map((p) => ({
+    day: new Date(p.date).toLocaleDateString("fr-FR", { weekday: "short" }),
+    v: p.bookings_total,
+  }));
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-[#efeaf6] bg-white/90 px-8 py-4 backdrop-blur-md">
         <div>
-          <h1 className="font-display text-[22px] font-bold tracking-tight text-aya-ink">Bonjour Mourzane</h1>
-          <p className="mt-0.5 text-[13px] text-aya-text">Mercredi 21 mai · 12 rendez-vous aujourd'hui</p>
+          <h1 className="font-display text-[22px] font-bold tracking-tight text-aya-ink">
+            Bonjour{firstName ? ` ${firstName}` : ""}
+          </h1>
+          <p className="mt-0.5 text-[13px] text-aya-text">
+            {todayLabel}
+            {institutName ? ` · ${institutName}` : ""}
+            {dayStats ? ` · ${dayStats.bookings_total} rendez-vous aujourd'hui` : ""}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <PrimaryBtn onClick={onNewRdv}>
@@ -57,28 +135,54 @@ export default function Dashboard({
 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-8 py-6">
         <div className="flex gap-4">
-          <KpiCard label="RDV aujourd'hui" value="12" sub="+2 vs hier" icon={<IconCalendar size={18} />} />
-          <KpiCard label="Chiffre d'affaires" value="1 850 000 FCFA" sub="+18% vs mois dernier" icon={<IconCard size={18} />} accent />
-          <KpiCard label="Nouveaux clients" value="34" sub="+12 vs mois dernier" icon={<IconUsers size={18} />} />
-          <KpiCard label="Taux de remplissage" value="78%" sub="+8% vs mois dernier" icon={<IconChart size={18} />} accent />
+          <KpiCard
+            label="RDV aujourd'hui"
+            value={dayStats ? String(dayStats.bookings_total) : loading ? "…" : "0"}
+            sub={dayStats ? `${dayStats.pending} en attente` : "Données API"}
+            icon={<IconCalendar size={18} />}
+          />
+          <KpiCard
+            label="Confirmés"
+            value={dayStats ? String(dayStats.confirmed) : loading ? "…" : "0"}
+            sub="Statut confirmé"
+            icon={<IconCard size={18} />}
+            accent
+          />
+          <KpiCard
+            label="Annulés"
+            value={dayStats ? String(dayStats.cancelled) : loading ? "…" : "0"}
+            sub="Aujourd'hui"
+            icon={<IconUsers size={18} />}
+          />
+          <KpiCard
+            label="Terminés"
+            value={dayStats ? String(dayStats.completed) : loading ? "…" : "0"}
+            sub="Aujourd'hui"
+            icon={<IconChart size={18} />}
+            accent
+          />
         </div>
 
         <div className="grid grid-cols-12 gap-4">
           <Card className="col-span-3">
             <RowTitle title="Prochains rendez-vous" onAll={() => onNavigate("rdv")} />
             <div className="flex flex-col gap-2.5">
-              {APPOINTMENTS.filter((a) => a.date === "21 mai 2025").map((apt) => (
-                <div key={apt.id} className="flex items-center gap-2.5 rounded-xl bg-aya-bg px-3 py-2.5 transition hover:bg-[#efeaf6]">
-                  <Avatar initials={apt.avatar} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-display text-[13px] font-semibold text-aya-ink">{apt.name}</div>
-                    <div className="truncate text-[11px] text-aya-text">
-                      {apt.time} · {apt.service}
+              {upcoming.length === 0 ? (
+                <Empty title="Aucun rendez-vous" sub={loading ? "Chargement…" : "Les prochains RDV apparaîtront ici."} />
+              ) : (
+                upcoming.map((apt) => (
+                  <div key={apt.id} className="flex items-center gap-2.5 rounded-xl bg-aya-bg px-3 py-2.5 transition hover:bg-[#efeaf6]">
+                    <Avatar initials={initials(apt.client_name)} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-display text-[13px] font-semibold text-aya-ink">{apt.client_name}</div>
+                      <div className="truncate text-[11px] text-aya-text">
+                        {formatDayLabel(apt.starts_at)} · {formatTime(apt.starts_at)} · {apt.service_name}
+                      </div>
                     </div>
+                    <StatusBadge status={apt.status} />
                   </div>
-                  <StatusBadge status={apt.status} />
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <button onClick={() => onNavigate("rdv")} className="mt-3.5 w-full font-display text-xs font-semibold text-aya-pink">
               Voir tous les rendez-vous →
@@ -211,11 +315,11 @@ export default function Dashboard({
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-display text-xs font-semibold text-aya-ink">{p.name}</div>
                     <div className="text-[10px] text-aya-text">
-                      {p.duration} · {p.price.toLocaleString("fr-FR")} FCFA
+                      {p.duration_min} min · {formatFcfa(p.price_cents)}
                     </div>
                   </div>
                   <span className="rounded-full bg-[#E8F8F0] px-2 py-0.5 text-[10px] font-semibold text-[#1A8A55]">
-                    {p.available ? "Disponible" : "Pause"}
+                    {p.is_active ? "Disponible" : "Pause"}
                   </span>
                 </div>
               ))}
@@ -234,19 +338,24 @@ export default function Dashboard({
               <span className="text-xs text-aya-text">Rechercher une cliente...</span>
             </div>
             <div className="flex flex-col gap-2">
-              {CLIENTS.slice(0, 5).map((cl) => (
+              {clients.slice(0, 5).map((cl) => (
                 <button key={cl.id} onClick={() => onNavigate("clientes")} className="flex items-center gap-2.5 rounded-[10px] bg-aya-bg px-2.5 py-2 text-left">
-                  <Avatar initials={cl.avatar} />
+                  <Avatar initials={initials(cl.full_name)} />
                   <div className="min-w-0 flex-1">
-                    <div className="font-display text-xs font-semibold text-aya-ink">{cl.name}</div>
-                    <div className="text-[10px] text-aya-text">Dernière visite : {cl.last}</div>
+                    <div className="font-display text-xs font-semibold text-aya-ink">{cl.full_name}</div>
+                    <div className="text-[10px] text-aya-text">
+                      Dernière visite : {cl.last_visit_at ? formatDayLabel(cl.last_visit_at) : "—"}
+                    </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[11px] font-semibold text-aya-purple">{cl.total.toLocaleString("fr-FR")} FCFA</div>
+                    <div className="text-[11px] font-semibold text-aya-purple">{formatFcfa(cl.total_cents)}</div>
                     <span className="text-[10px] text-aya-text">Total dépensé</span>
                   </div>
                 </button>
               ))}
+              {clients.length === 0 && (
+                <p className="text-[11px] text-aya-text">{activity[0] ? `${activity[0].client_name} · dernière activité` : "Aucune cliente pour le moment."}</p>
+              )}
             </div>
           </Card>
 
@@ -259,8 +368,8 @@ export default function Dashboard({
             </div>
             <div className="mb-3 grid grid-cols-2 gap-2">
               {[
-                { label: "Chiffre d'affaires", val: "1 850 000", unit: "FCFA", delta: "+18%" },
-                { label: "Rendez-vous", val: "87", unit: "", delta: "+12%" },
+                { label: "Rendez-vous semaine", val: String(chart.reduce((sum, p) => sum + p.bookings_total, 0)), unit: "", delta: "7 jours" },
+                { label: "Rendez-vous", val: String(dayStats?.bookings_total ?? 0), unit: "", delta: "Aujourd'hui" },
               ].map((s) => (
                 <div key={s.label}>
                   <div className="font-display text-[10px] text-aya-text">{s.label}</div>
@@ -273,7 +382,7 @@ export default function Dashboard({
             </div>
             <div className="mb-3 h-20">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={REVENUE_DATA} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                <AreaChart data={chartRows} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={C.pink} stopOpacity={0.25} />
@@ -282,7 +391,7 @@ export default function Dashboard({
                   </defs>
                   <XAxis dataKey="day" tick={{ fontSize: 9, fill: C.text }} axisLine={false} tickLine={false} />
                   <YAxis hide />
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none" }} formatter={(v: number) => [`${(v / 1000).toFixed(0)}K FCFA`, "CA"]} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none" }} formatter={(v) => [`${Number(v ?? 0)} RDV`, "Volume"]} />
                   <Area type="monotone" dataKey="v" stroke={C.pink} strokeWidth={2} fill="url(#revGrad)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -291,8 +400,8 @@ export default function Dashboard({
               <div className="h-[90px] w-[90px] shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={2} dataKey="value">
-                      {PIE_DATA.map((entry) => (
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={2} dataKey="value">
+                      {pieData.map((entry) => (
                         <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Pie>
@@ -300,7 +409,7 @@ export default function Dashboard({
                 </ResponsiveContainer>
               </div>
               <div className="flex flex-1 flex-col gap-1">
-                {PIE_DATA.map((d) => (
+                {pieData.map((d) => (
                   <div key={d.name} className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-sm" style={{ background: d.color }} />
@@ -332,7 +441,7 @@ export default function Dashboard({
                     <AyaLogo width={40} />
                   </div>
                   <div>
-                    <div className="font-display text-[11px] font-bold text-aya-cream">ANDAL BEAUTY STUDIO</div>
+                    <div className="font-display text-[11px] font-bold text-aya-cream">{institutName ?? "Votre institut"}</div>
                     <div className="text-[9px] text-aya-cream/60">⭐ 4,9 (126 avis) · Dakar, Sénégal</div>
                   </div>
                 </div>

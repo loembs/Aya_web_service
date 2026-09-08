@@ -3,6 +3,11 @@ dist/
 build/
 .cache/
 .env*
+*.pem
+*.key
+*.p12
+credentials.json
+*serviceAccount*.json
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo

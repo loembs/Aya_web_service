@@ -5,6 +5,19 @@ import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
 
+const DEFAULT_API_PROXY = 'https://aya-backend-service.onrender.com'
+
+function apiDevProxy() {
+  const target = (process.env.VITE_API_BASE_URL || DEFAULT_API_PROXY).replace(/\/+$/, '')
+  const toApi = { target, changeOrigin: true, secure: true }
+  return {
+    '/web': toApi,
+    '/mobile': toApi,
+    '/api': toApi,
+    '/health': toApi,
+  }
+}
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
@@ -34,10 +47,12 @@ export default defineConfig(({ mode }) => {
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
       watch: { ignored: ['**/.figma/**'] },
+      proxy: apiDevProxy(),
     },
     preview: {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      proxy: apiDevProxy(),
     },
   }
 })

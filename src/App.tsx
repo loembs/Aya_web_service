@@ -14,11 +14,19 @@ import Marketing from "./pages/Marketing";
 import Statistiques from "./pages/Statistiques";
 import Parametres from "./pages/Parametres";
 import { Modal, NewRdvForm } from "./components";
+import { useAuth } from "./auth/AuthContext";
+import Agency from "./pages/Agency";
+import Activate from "./pages/Activate";
 
-type AuthMode = "app" | "login" | "signup" | "onboarding";
+type AuthMode = "login" | "signup" | "onboarding";
 
 export default function App() {
-  const [auth, setAuth] = useState<AuthMode>("app");
+  const { ready, authenticated, logout, isAgencyAdmin } = useAuth();
+  const [auth, setAuth] = useState<AuthMode>("login");
+  const [activateToken, setActivateToken] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("activate");
+  });
   const [page, setPage] = useState("dashboard");
   const [settingsTab, setSettingsTab] = useState("general");
   const [rdvOpen, setRdvOpen] = useState(false);
@@ -36,17 +44,40 @@ export default function App() {
     setPage(id);
   };
 
-  if (auth !== "app") {
-  return (
+  const clearActivate = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("activate");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    setActivateToken(null);
+    setPage("dashboard");
+  };
+
+  if (!ready) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-aya-bg text-sm text-aya-text">
+        Chargement de la session…
+      </div>
+    );
+  }
+
+  if (activateToken && !authenticated) {
+    return <Activate token={activateToken} onDone={clearActivate} onCancel={clearActivate} />;
+  }
+
+  if (!authenticated) {
+    return (
       <Auth
         mode={auth}
         onMode={(m) => setAuth(m)}
         onEnter={() => {
-          setAuth("app");
           setPage("dashboard");
         }}
       />
     );
+  }
+
+  if (isAgencyAdmin) {
+    return <Agency />;
   }
 
   return (
@@ -76,7 +107,10 @@ export default function App() {
           <Parametres
             key={settingsTab}
             initialTab={settingsTab}
-            onLogout={() => setAuth("login")}
+            onLogout={() => {
+              logout();
+              setAuth("login");
+            }}
           />
         )}
       </div>

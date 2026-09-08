@@ -1,27 +1,36 @@
-import { useState } from "react";
-import { APPOINTMENTS, TEAM, fmt } from "../data";
+import { useMemo, useState } from "react";
 import type { Status } from "../data";
 import { C } from "../theme";
-import { PageHeader, PrimaryBtn, SearchBar, StatusBadge, Avatar, Card } from "../components";
+import { PageHeader, PrimaryBtn, SearchBar, StatusBadge, Avatar, Card, Empty } from "../components";
 import { IconPlus, IconFilter } from "../icons";
+import { useBookings } from "../api/useBookings";
+import { formatDayLabel, formatFcfa, formatTime, initials } from "../api/format";
 
 export default function RendezVous({ onNewRdv }: { onNewRdv: () => void }) {
+  const { rows, loading, error } = useBookings();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
-  const [staff, setStaff] = useState("Toutes");
 
-  const rows = APPOINTMENTS.filter((a) => {
-    if (status !== "all" && a.status !== status) return false;
-    if (staff !== "Toutes" && a.staff !== staff) return false;
-    if (q && !a.name.toLowerCase().includes(q.toLowerCase()) && !a.service.toLowerCase().includes(q.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((a) => {
+      if (status !== "all" && a.status !== status) return false;
+      if (
+        needle &&
+        !a.client_name.toLowerCase().includes(needle) &&
+        !a.service_name.toLowerCase().includes(needle)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [rows, q, status]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="Rendez-vous"
-        subtitle={`${rows.length} rendez-vous affichés`}
+        subtitle={loading ? "Chargement…" : `${filtered.length} rendez-vous affichés`}
         action={
           <PrimaryBtn onClick={onNewRdv}>
             <IconPlus size={14} /> Nouveau rendez-vous
@@ -46,16 +55,6 @@ export default function RendezVous({ onNewRdv }: { onNewRdv: () => void }) {
               {s === "all" ? "Tous" : s === "confirmed" ? "Confirmé" : s === "pending" ? "En attente" : s === "cancelled" ? "Annulé" : "Terminé"}
             </button>
           ))}
-          <select
-            value={staff}
-            onChange={(e) => setStaff(e.target.value)}
-            className="ml-auto rounded-lg bg-aya-bg px-3 py-1.5 text-xs text-aya-ink outline-none"
-          >
-            <option>Toutes</option>
-            {TEAM.map((t) => (
-              <option key={t.id}>{t.short}</option>
-            ))}
-          </select>
         </Card>
 
         <Card className="overflow-hidden p-0">
@@ -71,31 +70,43 @@ export default function RendezVous({ onNewRdv }: { onNewRdv: () => void }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b border-[#f6f2fb] last:border-0 hover:bg-aya-bg/40">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar initials={r.avatar} size={32} />
-                      <div>
-                        <div className="font-display text-[13px] font-semibold text-aya-ink">{r.name}</div>
-                        <div className="text-[11px] text-aya-text">{r.phone}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-[13px] text-aya-ink">
-                    {r.date}
-                    <div className="text-[11px] text-aya-text">
-                      {r.time} – {r.end}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-[13px]">{r.service}</td>
-                  <td className="px-3 py-3 text-[13px] text-aya-text">{r.staff}</td>
-                  <td className="px-3 py-3 font-display text-[13px] font-semibold text-aya-purple">{fmt(r.price)}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge status={r.status} />
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-8">
+                    <Empty
+                      title={error ?? "Aucun rendez-vous"}
+                      sub={loading ? "Chargement depuis l'API…" : "Les réservations de votre institut apparaîtront ici."}
+                    />
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map((r) => (
+                  <tr key={r.id} className="border-b border-[#f6f2fb] last:border-0 hover:bg-aya-bg/40">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar initials={initials(r.client_name)} size={32} />
+                        <div>
+                          <div className="font-display text-[13px] font-semibold text-aya-ink">{r.client_name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-[13px] text-aya-ink">
+                      {formatDayLabel(r.starts_at)}
+                      <div className="text-[11px] text-aya-text">
+                        {formatTime(r.starts_at)} – {formatTime(r.ends_at)}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-[13px]">{r.service_name}</td>
+                    <td className="px-3 py-3 text-[13px] text-aya-text">{r.praticien_name ?? "—"}</td>
+                    <td className="px-3 py-3 font-display text-[13px] font-semibold text-aya-purple">
+                      {r.service_price_cents != null ? formatFcfa(r.service_price_cents) : "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge status={r.status} />
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </Card>
