@@ -1,9 +1,7 @@
+import { AyaLogo } from "./components";
 import { NAV_GROUPS } from "./data";
 import { NAV_ICONS, IconCrown, IconSettings } from "./icons";
 import { C } from "./theme";
-
-const LOGO_URL =
-  "https://res.cloudinary.com/dprbhsvxl/image/upload/v1787358731/WhatsApp_Image_2026-08-18_at_13.19.55_v4tlpn.jpg";
 
 export default function Sidebar({
   active,
@@ -27,10 +25,10 @@ export default function Sidebar({
         className={`border-b border-white/10 text-left ${collapsed ? "px-2 py-2.5" : "px-3.5 py-2.5"}`}
       >
         {collapsed ? (
-          <img src={LOGO_URL} alt="AYA" className="mx-auto h-9 w-9 rounded-lg object-cover" />
+          <AyaLogo width={36} compact className="mx-auto rounded-lg" />
         ) : (
           <div>
-            <img src={LOGO_URL} alt="AYA" className="h-11 w-[148px] rounded-lg object-cover object-center" />
+            <AyaLogo width={148} />
             <div className="mt-1 pl-0.5 text-[10px] font-semibold tracking-[0.28em] text-aya-cream/70">PRO</div>
           </div>
         )}

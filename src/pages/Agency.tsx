@@ -197,7 +197,7 @@ export default function Agency() {
         style={{ width: collapsed ? 84 : 248 }}
       >
         <div className={`flex border-b border-[#efeaf6] ${collapsed ? "justify-center px-2 py-4" : "px-5 py-5"}`}>
-          <AyaLogo width={collapsed ? 48 : 72} />
+          <AyaLogo width={collapsed ? 44 : 164} compact={collapsed} />
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {!collapsed && (

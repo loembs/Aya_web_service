@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
-import logoSrc from "./assets/aya-logo.jpg";
 import { C, SHADOW } from "./theme";
 import { AVATAR_COLORS } from "./data";
 import type { Status } from "./data";
@@ -11,25 +10,37 @@ import { listPraticiens } from "./api/team";
 import { ApiError } from "./api/errors";
 import type { ClientListResponseDTO, PraticienListResponseDTO, ServiceListResponseDTO } from "./api/dto";
 
+export const AYA_LOGO_URL =
+  "https://res.cloudinary.com/dprbhsvxl/image/upload/v1787358731/WhatsApp_Image_2026-08-18_at_13.19.55_v4tlpn.jpg";
+
 export function AyaLogo({
-  width = 88,
+  width = 160,
   className = "",
+  compact = false,
 }: {
   width?: number;
   className?: string;
+  compact?: boolean;
 }) {
+  const height = compact ? width : Math.round(width * 0.4);
+  const zoom = compact ? 2.35 : 2.5;
   return (
     <div
-      className={`shrink-0 overflow-hidden rounded-2xl ${className}`}
-      style={{ width, height: width }}
+      className={`relative shrink-0 overflow-hidden rounded-xl ${className}`}
+      style={{ width, height }}
       role="img"
       aria-label="AYA"
     >
       <img
-        src={logoSrc}
+        src={AYA_LOGO_URL}
         alt="AYA"
         draggable={false}
-        className="h-full w-full select-none object-cover"
+        className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
+        style={{
+          width: width * zoom,
+          height: width * zoom,
+          transform: "translate(-50%, -50%)",
+        }}
       />
     </div>
   );
