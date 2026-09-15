@@ -337,7 +337,7 @@ export default function Auth({
     <div className="flex min-h-screen bg-aya-bg">
       <aside className="hidden w-[340px] shrink-0 flex-col justify-between p-10 lg:flex" style={{ background: C.purple }}>
         <div>
-          <AyaLogo width={168} />
+          <AyaLogo width={96} className="border border-aya-cream/25" />
           <div className="mt-1 text-xs font-semibold tracking-[0.22em] text-aya-cream">PRO</div>
           <h2 className="mt-10 font-display text-2xl font-bold leading-snug text-aya-cream">
             Configurez votre salon en quelques minutes.
@@ -520,7 +520,7 @@ function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="relative hidden w-[44%] flex-col justify-between overflow-hidden p-12 lg:flex" style={{ background: C.purple }}>
         <div>
-          <AyaLogo width={200} />
+          <AyaLogo width={112} className="border border-aya-cream/25" />
           <div className="mt-1 text-xs font-semibold tracking-[0.22em] text-aya-cream">PRO</div>
         </div>
         <div>
@@ -535,7 +535,12 @@ function Shell({ children }: { children: ReactNode }) {
         <div className="pointer-events-none absolute -right-16 -bottom-16 h-64 w-64 rounded-full bg-aya-pink/20 blur-3xl" />
       </aside>
       <main className="flex flex-1 items-center justify-center bg-aya-bg p-8">
-        <div className="w-full max-w-[420px]">{children}</div>
+        <div className="w-full max-w-[420px]">
+          <div className="mb-6 lg:hidden">
+            <AyaLogo width={72} />
+          </div>
+          {children}
+        </div>
       </main>
     </div>
   );

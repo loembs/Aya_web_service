@@ -196,13 +196,8 @@ export default function Agency() {
         className="flex h-screen shrink-0 flex-col border-r border-[#efeaf6] bg-white"
         style={{ width: collapsed ? 84 : 248 }}
       >
-        <div className={`border-b border-[#efeaf6] ${collapsed ? "px-2 py-4" : "px-5 py-5"}`}>
-          <AyaLogo width={collapsed ? 64 : 118} className={collapsed ? "mx-auto" : ""} />
-          {!collapsed && (
-            <p className="mt-1 font-display text-[10px] font-semibold tracking-[0.22em] text-aya-purple/55 uppercase">
-              Agence
-            </p>
-          )}
+        <div className={`flex border-b border-[#efeaf6] ${collapsed ? "justify-center px-2 py-4" : "px-5 py-5"}`}>
+          <AyaLogo width={collapsed ? 48 : 72} />
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {!collapsed && (

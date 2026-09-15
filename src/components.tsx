@@ -12,30 +12,24 @@ import { ApiError } from "./api/errors";
 import type { ClientListResponseDTO, PraticienListResponseDTO, ServiceListResponseDTO } from "./api/dto";
 
 export function AyaLogo({
-  width = 132,
+  width = 88,
   className = "",
 }: {
   width?: number;
   className?: string;
 }) {
-  const scale = 2.55;
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
-      style={{ width, height: width * 0.36 }}
+      className={`shrink-0 overflow-hidden rounded-2xl ${className}`}
+      style={{ width, height: width }}
       role="img"
       aria-label="AYA"
     >
       <img
         src={logoSrc}
-        alt=""
+        alt="AYA"
         draggable={false}
-        className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
-        style={{
-          width: width * scale,
-          height: width * scale,
-          transform: "translate(-50%, -50%)",
-        }}
+        className="h-full w-full select-none object-cover"
       />
     </div>
   );

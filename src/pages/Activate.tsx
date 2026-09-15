@@ -50,7 +50,7 @@ export default function Activate({
   return (
     <div className="flex min-h-screen items-center justify-center bg-aya-bg p-8">
       <div className="w-full max-w-[420px] rounded-2xl bg-white p-8" style={{ boxShadow: "0 2px 16px rgba(60,33,100,0.08)" }}>
-        <AyaLogo width={140} />
+        <AyaLogo width={72} />
         <h1 className="mt-6 font-display text-2xl font-bold text-aya-ink">Choisissez votre mot de passe</h1>
         <p className="mt-2 text-sm text-aya-text">
           C’est une étape obligatoire avant d’accéder à votre institut. Le lien est à usage unique.

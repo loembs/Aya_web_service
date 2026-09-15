@@ -437,9 +437,7 @@ export default function Dashboard({
               />
               <div className="px-3 py-2.5">
                 <div className="mb-1.5 flex items-center gap-2">
-                  <div className="-mt-5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border-2 border-aya-cream/30 bg-aya-purple">
-                    <AyaLogo width={40} />
-                  </div>
+                    <AyaLogo width={36} className="-mt-5 rounded-[10px] border-2 border-aya-cream/30" />
                   <div>
                     <div className="font-display text-[11px] font-bold text-aya-cream">{institutName ?? "Votre institut"}</div>
                     <div className="text-[9px] text-aya-cream/60">⭐ 4,9 (126 avis) · Dakar, Sénégal</div>
