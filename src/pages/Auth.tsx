@@ -9,7 +9,7 @@ import { submitTenantApplication } from "../api/onboarding";
 import { ApiError } from "../api/errors";
 import { saveTokens } from "../api/session";
 import { useAuth } from "../auth/AuthContext";
-import { DevTestTotpHint, isDevTestStaff } from "../dev/DevTestTotpHint";
+import { DevTestTotpHint, isTestStaffEmail } from "../dev/DevTestTotpHint";
 
 const STEPS = [
   { id: 1, title: "Votre établissement", sub: "Qui êtes-vous ?" },
@@ -166,7 +166,7 @@ export default function Auth({
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
               />
             </Field>
-            {isDevTestStaff(email) && <DevTestTotpHint onFill={setOtp} />}
+            {isTestStaffEmail(email) && <DevTestTotpHint onFill={setOtp} />}
             {authError && (
               <p className="text-xs" style={{ color: C.red }}>
                 {authError}
@@ -208,6 +208,7 @@ export default function Auth({
                 onChange={(e) => setPassword(e.target.value)}
               />
             </Field>
+            {(isTestStaffEmail(email) || !email.trim()) && <DevTestTotpHint />}
             {authError && (
               <p className="text-xs" style={{ color: C.red }}>
                 {authError}
