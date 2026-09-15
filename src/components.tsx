@@ -91,12 +91,14 @@ export function KpiCard({
   sub,
   icon,
   accent,
+  subColor,
 }: {
   label: string;
   value: string;
   sub: string;
   icon: ReactNode;
   accent?: boolean;
+  subColor?: string;
 }) {
   return (
     <div
@@ -113,7 +115,7 @@ export function KpiCard({
         </div>
       </div>
       <div className="mb-1.5 font-display text-[25px] font-bold leading-none tracking-tight text-aya-ink">{value}</div>
-      <div className="text-[12px] font-medium" style={{ color: C.green }}>
+      <div className="text-[12px] font-medium" style={{ color: subColor ?? C.green }}>
         {sub}
       </div>
     </div>
